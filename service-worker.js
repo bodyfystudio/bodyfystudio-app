@@ -1,4 +1,4 @@
-const CACHE = 'bodyfy-pwa-v6';
+const CACHE = 'bodyfy-pwa-v7';
 const CORE = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './assets/icon.svg', './BodyfyStudio%20Logo.jpg'];
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(CORE)).then(() => self.skipWaiting()));
@@ -11,7 +11,7 @@ self.addEventListener('push', (event) => {
   try { payload = event.data ? event.data.json() : {}; } catch { payload = { body: event.data?.text() || '' }; }
   event.waitUntil(self.registration.showNotification(payload.title || 'BodyfyStudio', {
     body: payload.body || 'Your coach sent you an update.',
-    icon: '/assets/icon.svg',
+    icon: '/assets/icon-192.png',
     badge: '/assets/icon.svg',
     tag: payload.tag || 'bodyfy-broadcast',
     data: { url: payload.url || '/' },
