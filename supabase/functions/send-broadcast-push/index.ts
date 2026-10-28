@@ -2,16 +2,22 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { ApplicationServer, importVapidKeys } from 'jsr:@negrel/webpush@0.5.0';
 
 const appUrl = Deno.env.get('APP_URL') ?? 'https://bodyfystudio-app.vercel.app';
-const corsHeaders = {
-  'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': appUrl,
-};
+const allowedOrigins = new Set([appUrl, 'https://bodyfystudio-app.vercel.app', 'http://localhost:5173']);
+function getCorsHeaders(request: Request) {
+  const origin = request.headers.get('origin') ?? '';
+  return {
+    'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': allowedOrigins.has(origin) ? origin : appUrl,
+    'Vary': 'Origin',
+  };
+}
 
 Deno.serve(async (request) => {
-  if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (request.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405, headers: corsHeaders });
+  const headers = getCorsHeaders(request);
+  if (request.method === 'OPTIONS') return new Response('ok', { headers });
+  if (request.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405, headers });
 
   const authorization = request.headers.get('authorization');
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -20,36 +26,42 @@ Deno.serve(async (request) => {
   })();
   const vapidKeysB64 = Deno.env.get('VAPID_KEYS_JSON_B64');
   if (!authorization?.startsWith('Bearer ') || !supabaseUrl || !serviceKey || !vapidKeysB64) {
-    return Response.json({ error: 'Push service is not configured or the caller is not signed in.' }, { status: 503, headers: corsHeaders });
+    return Response.json({ error: 'Push service is not configured or the caller is not signed in.' }, { status: 503, headers });
   }
 
   const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
   const { data: authData, error: authError } = await admin.auth.getUser(authorization.slice('Bearer '.length));
-  if (authError || !authData.user) return Response.json({ error: 'Valid sign-in required.' }, { status: 401, headers: corsHeaders });
+  if (authError || !authData.user) return Response.json({ error: 'Valid sign-in required.' }, { status: 401, headers });
 
   let body: { broadcastId?: unknown };
-  try { body = await request.json(); } catch { return Response.json({ error: 'Invalid request.' }, { status: 400, headers: corsHeaders }); }
+  try { body = await request.json(); } catch { return Response.json({ error: 'Invalid request.' }, { status: 400, headers }); }
   const broadcastId = typeof body.broadcastId === 'string' ? body.broadcastId : '';
-  if (!broadcastId) return Response.json({ error: 'Broadcast ID is required.' }, { status: 400, headers: corsHeaders });
+  if (!broadcastId) return Response.json({ error: 'Broadcast ID is required.' }, { status: 400, headers });
 
   const { data: roleRow, error: roleError } = await admin.from('user_roles').select('role').eq('user_id', authData.user.id).maybeSingle();
-  if (roleError) return Response.json({ error: 'Could not verify account role.' }, { status: 500, headers: corsHeaders });
-  if (!['coach', 'super_admin'].includes(roleRow?.role)) return Response.json({ error: 'Coach access required.' }, { status: 403, headers: corsHeaders });
+  if (roleError) return Response.json({ error: 'Could not verify account role.' }, { status: 500, headers });
+  if (!['coach', 'super_admin'].includes(roleRow?.role)) return Response.json({ error: 'Coach access required.' }, { status: 403, headers });
 
   const { data: broadcast, error: broadcastError } = await admin.from('broadcasts')
     .select('id,author_id,title,message,action_url').eq('id', broadcastId).eq('author_id', authData.user.id).maybeSingle();
-  if (broadcastError) return Response.json({ error: 'Could not load this broadcast.' }, { status: 500, headers: corsHeaders });
-  if (!broadcast) return Response.json({ error: 'Broadcast not found or not owned by caller.' }, { status: 404, headers: corsHeaders });
+  if (broadcastError) return Response.json({ error: 'Could not load this broadcast.' }, { status: 500, headers });
+  if (!broadcast) return Response.json({ error: 'Broadcast not found or not owned by caller.' }, { status: 404, headers });
 
   const { data: clientRoles, error: clientsError } = await admin.from('user_roles').select('user_id').eq('role', 'client');
-  if (clientsError) return Response.json({ error: 'Could not load client accounts.' }, { status: 500, headers: corsHeaders });
+  if (clientsError) return Response.json({ error: 'Could not load client accounts.' }, { status: 500, headers });
   const clientIds = (clientRoles ?? []).map((row) => row.user_id);
-  if (!clientIds.length) return Response.json({ sent: 0, failed: 0, message: 'No client accounts are registered.' }, { headers: corsHeaders });
+  if (!clientIds.length) return Response.json({ sent: 0, failed: 0, message: 'No client accounts are registered.' }, { headers });
 
   const { data: subscriptions, error: subscriptionsError } = await admin.from('push_subscriptions')
     .select('user_id,endpoint,p256dh,auth_key').in('user_id', clientIds);
-  if (subscriptionsError) return Response.json({ error: 'Could not load notification subscriptions.' }, { status: 500, headers: corsHeaders });
-  if (!subscriptions?.length) return Response.json({ sent: 0, failed: 0, message: 'No clients have enabled push notifications yet.' }, { headers: corsHeaders });
+  if (subscriptionsError) {
+    console.error('Could not load push subscriptions:', subscriptionsError.code, subscriptionsError.message);
+    const missingTable = subscriptionsError.code === '42P01' || subscriptionsError.code === 'PGRST205';
+    return Response.json({ error: missingTable
+      ? 'Push setup is incomplete. Run migration 20261028000500_push_subscriptions.sql in the Supabase SQL Editor.'
+      : 'Could not load notification subscriptions.' }, { status: 500, headers });
+  }
+  if (!subscriptions?.length) return Response.json({ sent: 0, failed: 0, message: 'No clients have enabled push notifications yet.' }, { headers });
 
   let vapidKeys;
   try {
@@ -57,7 +69,7 @@ Deno.serve(async (request) => {
     vapidKeys = await importVapidKeys(exportedKeys);
   } catch (error) {
     console.error('Could not import VAPID keys:', error);
-    return Response.json({ error: 'Push keys are invalid.' }, { status: 500, headers: corsHeaders });
+    return Response.json({ error: 'Push keys are invalid.' }, { status: 500, headers });
   }
   const pushServer = await ApplicationServer.new({ contactInformation: 'mailto:bodyfystudio@gmail.com', vapidKeys });
   const payload = JSON.stringify({
@@ -85,5 +97,5 @@ Deno.serve(async (request) => {
     }
   }));
 
-  return Response.json({ sent, failed }, { headers: corsHeaders });
+  return Response.json({ sent, failed }, { headers });
 });
