@@ -44,4 +44,4 @@ npx supabase secrets set --env-file .env.push.local
 npx supabase functions deploy send-broadcast-push
 ```
 
-Apply `supabase/migrations/20261028000500_push_subscriptions.sql` in the Supabase SQL Editor before clients enable notifications. The coach broadcast still appears in every client’s in-app inbox; device alerts are sent only to opted-in devices.
+Apply `supabase/migrations/20261028000500_push_subscriptions.sql` and `supabase/migrations/20261028000600_push_sender_broadcast_read.sql` in the Supabase SQL Editor before testing push alerts. The coach broadcast still appears in every client’s in-app inbox; device alerts are sent only to opted-in devices.

@@ -44,7 +44,13 @@ Deno.serve(async (request) => {
 
   const { data: broadcast, error: broadcastError } = await admin.from('broadcasts')
     .select('id,author_id,title,message,action_url').eq('id', broadcastId).eq('author_id', authData.user.id).maybeSingle();
-  if (broadcastError) return Response.json({ error: 'Could not load this broadcast.' }, { status: 500, headers });
+  if (broadcastError) {
+    console.error('Could not read broadcast for push delivery:', broadcastError.code, broadcastError.message);
+    const permissionDenied = broadcastError.code === '42501';
+    return Response.json({ error: permissionDenied
+      ? 'Push sender needs read access to broadcasts. Run migration 20261028000600_push_sender_broadcast_read.sql.'
+      : 'Could not load this broadcast.' }, { status: 500, headers });
+  }
   if (!broadcast) return Response.json({ error: 'Broadcast not found or not owned by caller.' }, { status: 404, headers });
 
   const { data: clientRoles, error: clientsError } = await admin.from('user_roles').select('user_id').eq('role', 'client');

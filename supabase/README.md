@@ -7,6 +7,7 @@ Apply each migration in `migrations/` in filename order using the Supabase SQL E
 3. `20261028000300_admin_role_management.sql` — protected super-admin RPC for changing client/coach roles.
 4. `20261028000400_service_role_role_table_grants.sql` — the minimal `user_roles` table permissions needed by the invitation function. This fixes the `42501 permission denied for table user_roles` error.
 5. `20261028000500_push_subscriptions.sql` — per-account device push subscriptions protected by RLS.
+6. `20261028000600_push_sender_broadcast_read.sql` — read-only `service_role` permission needed by the push sender to load a broadcast.
 
 The PWA only uses the project URL and publishable key. Never put a secret/service-role key or database password in browser code or a `VITE_` variable.
 
