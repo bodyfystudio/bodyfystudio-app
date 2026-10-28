@@ -30,8 +30,15 @@ See [supabase/README.md](supabase/README.md) for migration order, first super ad
 - Clients can receive live inbox updates while the app is open when the Realtime migration is enabled.
 - Clients can opt into device push alerts for coach broadcasts; each device must grant permission.
 - Super admins can manage client/coach roles through a protected SQL RPC and invite coaches through a protected Edge Function.
+- Super admins can open any client or coach from **Accounts → Open account**. The workspace reads shared profile, assignment, plan, progress, appointment, recipe, broadcast, inbox, and device-registration information. It supports editing records, creating plans/progress/appointments, assigning or unassigning coaches, and marking inbox messages read/unread.
 
-Client/coach assignments, client plans, and saving recipes across devices are not implemented yet. Avoid entering real health records until those workflows and the hosted security configuration are reviewed.
+Apply `supabase/migrations/20261029000700_admin_account_workspace.sql` for account management. Its RPCs check the caller's current database role, restrict edits to the selected account's records, and record the real admin as the actor in `admin_account_activity`. It never replaces the admin session with a client's login. Device endpoint credentials and Auth secrets are excluded. Editing broadcast history updates the shared inbox message without sending a second push.
+
+The client's existing demonstration progress, fixed daily plan, recipe favorites, and checklists are still browser-local and are not remote account records. The admin workspace labels this distinction; it does not show the admin browser's demo values as the client's data.
+
+Regression checks: `scripts/test-admin-account-permissions.sql` creates temporary fixtures inside a rollback-only transaction. `node scripts/test-admin-workspace.mjs` exercises the workspace UI with mocked RPCs and requires Playwright; optionally set `PLAYWRIGHT_CHANNEL=msedge` to use installed Edge.
+
+The admin workspace manages shared assignments and plan records. Connecting those records to the client's current demo screens, and saving recipe favorites across devices, remain future work. Avoid entering real health records until those workflows and the hosted security configuration are reviewed.
 
 ## Device push notifications
 

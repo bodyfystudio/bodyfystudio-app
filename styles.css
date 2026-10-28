@@ -13,3 +13,8 @@
 }
 
 .brand-mark.brand-logo{background:#000;object-fit:contain;flex-shrink:0}
+
+.account-admin-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;background:#eaf3dc;border:1px solid #d5e6bd;border-radius:16px;padding:16px;margin-bottom:18px}
+.account-admin-banner strong,.account-admin-banner span{display:block;overflow-wrap:anywhere}.account-admin-banner span{font-size:12px;margin-top:5px;color:#535d43}
+.account-record,.account-editor{margin-bottom:16px}.account-detail{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.6;margin:6px 0 12px}.account-actions{display:flex;gap:10px;flex-wrap:wrap}.account-editor h2{margin-bottom:18px}.account-editor label{display:grid;gap:7px}.account-object{min-width:0;border:1px solid var(--line);border-radius:12px;margin:0 0 16px;padding:12px}.account-object legend{font-size:12px;font-weight:700}.account-object-row{display:grid;grid-template-columns:1fr 1.5fr auto;gap:8px;margin-bottom:8px}.account-object-row input{min-width:0;width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:16px}.account-editor input[type=checkbox]{width:auto;justify-self:start}.account-editor .field-help{margin-top:8px}
+@media(max-width:760px){.account-admin-banner{align-items:flex-start;flex-direction:column}.account-object-row{grid-template-columns:1fr}.account-record .grid-2{grid-template-columns:1fr}}
