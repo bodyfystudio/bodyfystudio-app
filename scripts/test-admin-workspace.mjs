@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 const {chromium} = createRequire(import.meta.url)('playwright');
 const server = createServer(async (request, response) => {
   if (request.url === '/admin-accounts.js') {response.setHeader('Content-Type','text/javascript'); response.end(await readFile(new URL('../admin-accounts.js',import.meta.url)));}
+  else if (request.url === '/client-data.js') {response.setHeader('Content-Type','text/javascript'); response.end(await readFile(new URL('../client-data.js',import.meta.url)));}
   else if (request.url === '/styles.css') {response.setHeader('Content-Type','text/css'); response.end(await readFile(new URL('../styles.css',import.meta.url)));}
   else response.end('<!doctype html><link rel="stylesheet" href="/styles.css"><main id="workspace" style="padding:16px"></main>');
 });
@@ -23,7 +24,7 @@ try {
     window.snapshot = {profile:{id:'client',display_name:'Client <script>alert(1)</script>',email:'client@test.invalid',role:'client'},
       people:[{id:'coach',name:'Test coach',role:'coach'},{id:'client',name:'Test client',role:'client'}],
       plans:[{id:'plan',client_id:'client',coach_id:'coach',title:'Plan A',status:'active',plan_data:{Breakfast:'Oats',Water:8}}],
-      progress:[], appointments:[], recipes:[], broadcasts:[], devices:[], activity:[], assignments:[],
+      progress:[], appointments:[], recipes:[], broadcasts:[], devices:[], activity:[], assignments:[],habits:[],favorites:[],checklist:[],available_recipes:[],
       inbox:[{id:'message',title:'Water reminder',message:'Drink water',created_at:new Date().toISOString(),read_at:null}]};
     const supabase = {rpc:async (name,args) => {
       window.calls.push({name,args});
