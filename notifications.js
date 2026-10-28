@@ -12,7 +12,7 @@ export async function loadInboxRows(supabase,userId){
 export function createInboxController({supabase,getUser,getNotices,reload,render,notify}){
   let lastClear=null,pending=false,epoch=0;
   async function clear(ids,cleared=true){
-    if(pending||!ids.length||getUser()?.role!=='client')return;
+    if(pending||!ids.length||!['client','coach'].includes(getUser()?.role))return;
     const user=getUser(),requestEpoch=epoch;pending=true;
     const buttons=[...document.querySelectorAll('[data-clear-notice],[data-clear-inbox],[data-undo-clear]')];buttons.forEach(b=>{b.disabled=true;});
     try{
@@ -29,12 +29,12 @@ export function createInboxController({supabase,getUser,getNotices,reload,render
   function view(notices){
     const rows=[...notices].sort((a,b)=>b.created-a.created);
     const canUndo=lastClear?.userId===getUser()?.id;
-    return `<div class="page-heading"><div><div class="eyebrow">Your updates</div><h1>Notifications</h1><p>Reminders and updates from your BodyfyStudio coach.</p></div><div class="account-actions"><button class="btn btn-outline" data-action="mark-read" ${rows.length?'':'disabled'}>Mark all as read</button><button class="btn btn-outline" data-clear-inbox ${rows.length?'':'disabled'}>Clear all</button></div></div>
+    return `<div class="page-heading"><div><div class="eyebrow">Your updates</div><h1>Notifications</h1><p>${getUser()?.role==='coach'?'Studio announcements and updates for your coach account.':'Reminders and updates from BodyfyStudio.'}</p></div><div class="account-actions"><button class="btn btn-outline" data-action="mark-read" ${rows.length?'':'disabled'}>Mark all as read</button><button class="btn btn-outline" data-clear-inbox ${rows.length?'':'disabled'}>Clear all</button></div></div>
     ${canUndo?'<div class="notice-bar inbox-undo" role="status">Notifications cleared. <button class="link-button" data-undo-clear>Undo</button></div>':''}
     <section class="card"><div class="card-title-row"><h2 class="card-title">Recent updates</h2><span class="tag">${rows.length} total</span></div>${rows.length?`<div class="notification-list">${rows.map(n=>{
       const icon=n.kind==='zoom'?'🎥':n.kind==='water'?'💧':n.kind==='fruit'?'🍊':'✦';
       return `<article class="notification-item ${n.read?'':'unread'}"><div class="notification-icon">${icon}</div><div class="notification-content"><strong>${esc(n.title)}</strong><p>${esc(n.message)}</p><time>${esc(new Date(n.created).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}))}</time>${n.kind==='zoom'&&safeLink(n.link)?`<div style="margin-top:10px"><a class="btn btn-primary btn-sm" href="${esc(n.link)}" target="_blank" rel="noopener noreferrer" data-notice-link="${n.id}">Join Zoom meeting ↗</a></div>`:''}</div><div class="notification-actions">${n.read?'':'<span class="tag">New</span>'}<button class="link-button" data-clear-notice="${n.id}" aria-label="Clear ${esc(n.title)}">Clear</button></div></article>`;
-    }).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">🔔</div><strong>You’re all caught up.</strong><br>New coach reminders will appear here.</div>'}</section><div class="notice-bar" style="margin-top:15px">Clearing removes messages from your inbox on all your devices. New notifications will still arrive.</div>`;
+    }).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">🔔</div><strong>You’re all caught up.</strong><br>New updates will appear here.</div>'}</section><div class="notice-bar" style="margin-top:15px">Clearing removes messages from your inbox on all your devices. New notifications will still arrive.</div>`;
   }
   function bind(root=document){
     root.querySelectorAll('[data-clear-notice]').forEach(b=>b.onclick=()=>clear([b.dataset.clearNotice]));

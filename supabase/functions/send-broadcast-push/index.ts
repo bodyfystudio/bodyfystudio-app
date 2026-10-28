@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { ApplicationServer, importVapidKeys } from 'jsr:@negrel/webpush@0.5.0';
+import { loadRecipientSubscriptions } from './recipients.js';
 
 const appUrl = Deno.env.get('APP_URL') ?? 'https://bodyfystudio-app.vercel.app';
 const allowedOrigins = new Set([appUrl, 'https://bodyfystudio-app.vercel.app', 'http://localhost:5173']);
@@ -53,13 +54,7 @@ Deno.serve(async (request) => {
   }
   if (!broadcast) return Response.json({ error: 'Broadcast not found or not owned by caller.' }, { status: 404, headers });
 
-  const { data: clientRoles, error: clientsError } = await admin.from('user_roles').select('user_id').eq('role', 'client');
-  if (clientsError) return Response.json({ error: 'Could not load client accounts.' }, { status: 500, headers });
-  const clientIds = (clientRoles ?? []).map((row) => row.user_id);
-  if (!clientIds.length) return Response.json({ sent: 0, failed: 0, message: 'No client accounts are registered.' }, { headers });
-
-  const { data: subscriptions, error: subscriptionsError } = await admin.from('push_subscriptions')
-    .select('user_id,endpoint,p256dh,auth_key').in('user_id', clientIds);
+  const { subscriptions, recipientCount, error: subscriptionsError } = await loadRecipientSubscriptions(admin, broadcastId);
   if (subscriptionsError) {
     console.error('Could not load push subscriptions:', subscriptionsError.code, subscriptionsError.message);
     const missingTable = subscriptionsError.code === '42P01' || subscriptionsError.code === 'PGRST205';
@@ -67,7 +62,8 @@ Deno.serve(async (request) => {
       ? 'Push setup is incomplete. Run migration 20261028000500_push_subscriptions.sql in the Supabase SQL Editor.'
       : 'Could not load notification subscriptions.' }, { status: 500, headers });
   }
-  if (!subscriptions?.length) return Response.json({ sent: 0, failed: 0, message: 'No clients have enabled push notifications yet.' }, { headers });
+  if (!recipientCount) return Response.json({ sent: 0, failed: 0, message: 'No accounts are in this broadcast audience.' }, { headers });
+  if (!subscriptions.length) return Response.json({ sent: 0, failed: 0, message: 'No recipients have enabled device notifications yet.' }, { headers });
 
   let vapidKeys;
   try {

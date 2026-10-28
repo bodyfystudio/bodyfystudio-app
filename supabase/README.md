@@ -11,6 +11,7 @@ Apply each migration in `migrations/` in filename order using the Supabase SQL E
 7. `20261029000700_admin_account_workspace.sql` — super-admin account snapshot/edit RPCs and an activity log. Applied to this project on 29 October 2026. Supports **Accounts → Open account** without switching the admin's login session.
 8. `20261029000800_shared_client_data.sql` — shared daily habits, saved recipes, and plan checklists; protected account RPCs; extended admin editing and Realtime publication. Existing demonstration browser data is not imported.
 9. `20261029000900_clear_notifications.sql` — per-recipient notification clearing and restoration, including admin inbox history and audit records.
+10. `20261029001000_coach_inbox.sql` — private coach inboxes, super-admin broadcast audiences, and audience-based push delivery. Redeploy `send-broadcast-push` after applying it. Existing broadcasts keep their original client audience.
 
 The PWA only uses the project URL and publishable key. Never put a secret/service-role key or database password in browser code or a `VITE_` variable.
 

@@ -52,6 +52,11 @@ try{
   await page.getByRole('button',{name:'Undo',exact:true}).waitFor();
   await page.evaluate(()=>{window.controller.reset();window.user={id:'client-b',role:'client'};window.visible=[];window.render();});
   assert.equal(await page.getByRole('button',{name:'Undo',exact:true}).count(),0);
+  await page.evaluate(()=>{window.controller.reset();window.user={id:'coach-a',role:'coach'};window.rows=[{id:'coach-update',title:'Studio update',message:'Team update',kind:'custom',created:Date.now(),read:false}];window.visible=[...window.rows];window.render();});
+  await page.getByText('Studio announcements and updates for your coach account.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Clear Studio update',exact:true}).click();
+  await page.getByText('You’re all caught up.',{exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>window.calls.at(-1).args.target_user),'coach-a');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(errors,[]);
   console.log('PASS: individual clear, clear all, undo, failed save, new arrivals, account reset, and mobile layout.');
 }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}

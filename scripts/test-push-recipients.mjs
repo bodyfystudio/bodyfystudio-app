@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {loadRecipientSubscriptions} from '../supabase/functions/send-broadcast-push/recipients.js';
+const ids=Array.from({length:1005},(_,i)=>`recipient-${i}`);
+const devices=ids.map(user_id=>({user_id,endpoint:`https://push.test/${user_id}`}));
+devices.push({user_id:'outside-audience',endpoint:'https://push.test/wrong'});
+const queries=[];
+const admin={from(table){const q={table,ids:null,select(){return this;},eq(key,value){assert.equal(key,'broadcast_id');assert.equal(value,'coach-broadcast');return this;},order(){return this;},in(key,values){assert.equal(key,'user_id');this.ids=values;return this;},range(start,end){queries.push({table,ids:this.ids,start,end});return Promise.resolve({data:(table==='broadcast_recipients'?ids.map(client_id=>({client_id})):devices.filter(d=>this.ids.includes(d.user_id))).slice(start,end+1)});}};return q;}};
+const result=await loadRecipientSubscriptions(admin,'coach-broadcast');
+assert.equal(result.error,null);assert.equal(result.recipientCount,1005);assert.equal(result.subscriptions.length,1005);
+assert.ok(result.subscriptions.every(d=>d.user_id!=='outside-audience'));
+assert.equal(queries.filter(q=>q.table==='broadcast_recipients').length,2);
+assert.ok(queries.filter(q=>q.table==='push_subscriptions').every(q=>q.ids.length<=200));
+console.log('PASS: push uses the saved audience, excludes other accounts, paginates recipients, and batches device queries.');

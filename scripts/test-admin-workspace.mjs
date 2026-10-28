@@ -63,7 +63,7 @@ try {
     await window.workspace.open('coach',document.querySelector('#workspace'));
   });
   await page.getByRole('button',{name:'Recipes',exact:true}).waitFor();
-  assert.equal(await page.getByRole('button',{name:'Inbox',exact:true}).count(),0);
+  assert.equal(await page.getByRole('button',{name:'Inbox',exact:true}).count(),1);
   await page.getByRole('button',{name:'← Back to accounts'}).click();
   assert.equal(await page.evaluate(()=>window.closedAccount),true);
   await page.evaluate(async()=>{window.deny=true;await window.workspace.open('client',document.querySelector('#workspace'));});
