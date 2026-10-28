@@ -1,4 +1,4 @@
-const CACHE = 'bodyfy-pwa-v5';
+const CACHE = 'bodyfy-pwa-v6';
 const CORE = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './assets/icon.svg', './BodyfyStudio%20Logo.jpg'];
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(CORE)).then(() => self.skipWaiting()));
@@ -38,6 +38,10 @@ self.addEventListener('notificationclick', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (new URL(event.request.url).origin !== self.location.origin) return;
+  if (new URL(event.request.url).pathname === '/version.json') {
+    event.respondWith(fetch(event.request, { cache: 'no-store' }));
+    return;
+  }
   if (event.request.mode === 'navigate') {
     event.respondWith(fetch(event.request).then((response) => {
       if (response.ok) caches.open(CACHE).then((cache) => cache.put('./index.html', response.clone()));

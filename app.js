@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
+const APP_BUILD_ID = __APP_BUILD_ID__;
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -23,6 +24,7 @@ const starterRecipes = [
 const starter = { users:Object.values(DEMOS), recipes:starterRecipes, notifications:[], progress:{water:4,steps:6240,streak:6,weightStart:72.4,weightNow:70.8,week:[35,55,45,78,62,91,67]}, completed:[], bookings:[] };
 function loadData(){try{return {...structuredClone(starter),...JSON.parse(localStorage.getItem(STORE)||'{}')}}catch{return structuredClone(starter)}}
 let data=loadData(), currentUser=null, page='home', activeFilter='All', recipeQuery='', modal=null, toastTimer, pushSubscribed=false;
+let resumeCheckAt=0, resumeCheckPending=false;
 try { currentUser=JSON.parse(sessionStorage.getItem('bodyfy-user')||'null'); } catch {}
 const app=document.getElementById('app');
 const esc=(s='')=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -88,6 +90,9 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 async function installApp(){if(!deferredInstall)return;deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;document.querySelector('[data-install]')?.remove()}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal){modal=null;render()}});
 app.innerHTML='<main class="auth-screen"><section class="auth-panel"><div class="auth-box">Connecting securely to BodyfyStudio…</div></section></main>';
+async function refreshOnResume(){if(!currentUser||document.visibilityState!=='visible'||resumeCheckPending||Date.now()-resumeCheckAt<5000)return;resumeCheckPending=true;resumeCheckAt=Date.now();try{const response=await fetch(`/version.json?check=${Date.now()}`,{cache:'no-store'});if(response.ok){const {buildId}=await response.json();if(buildId&&buildId!==APP_BUILD_ID){try{const registration=await navigator.serviceWorker?.getRegistration();await registration?.update()}catch{}window.location.reload();return}}await refreshSharedData();if(currentUser?.role==='admin')await loadAdminDirectory();if(currentUser?.role==='client')await refreshPushStatus();if(!modal)render()}catch(error){console.warn('App resume refresh failed:',error)}finally{resumeCheckPending=false}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshOnResume()});
+window.addEventListener('pageshow',()=>{if(document.visibilityState==='visible')refreshOnResume()});
 supabase.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_OUT'){currentUser=null;renderLogin()}else if(event==='PASSWORD_RECOVERY'){passwordSetupFlow=true;renderPasswordSetup()}else if(event==='SIGNED_IN'&&session&&passwordSetupFlow){renderPasswordSetup()}else if(event==='SIGNED_IN'&&session&&currentUser?.id!==session.user.id){setTimeout(()=>acceptSession(session),0)}});
 supabase.auth.getSession().then(({data:sessionData,error})=>{if(error){toast(`Could not restore your session: ${error.message}`);renderLogin();return}if(sessionData.session&&passwordSetupFlow)renderPasswordSetup();else if(sessionData.session)acceptSession(sessionData.session);else renderLogin()});
 document.addEventListener('click',async event=>{const link=event.target.closest('[data-notice-link]');if(link&&currentUser?.role==='client'){const {error}=await supabase.from('broadcast_recipients').update({read_at:new Date().toISOString()}).eq('broadcast_id',link.dataset.noticeLink).eq('client_id',currentUser.id);if(error)toast(`Could not update inbox: ${error.message}`);else{const notice=data.notifications.find(x=>x.id===link.dataset.noticeLink);if(notice)notice.read=true}return}const markAll=event.target.closest('[data-action="mark-read"]');if(markAll&&currentUser?.role==='client'){const {error}=await supabase.from('broadcast_recipients').update({read_at:new Date().toISOString()}).eq('client_id',currentUser.id).is('read_at',null);if(error)toast(`Could not update inbox: ${error.message}`);else await refreshSharedData()}});
