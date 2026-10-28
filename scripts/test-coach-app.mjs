@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 const {chromium}=createRequire(import.meta.url)('playwright');
 const fake=String.raw`
 const role=new URL(location.href).searchParams.get('role')||'coach';
-const user={id:role,email:role+'@test.invalid'};window.testInserts=[];window.testSubscriptions=[];
+const user={id:role,email:role+'@test.invalid'};window.testInserts=[];window.testSubscriptions=[];window.testHistoryFailure=false;const hidden=new Set();
 const tables={profiles:[{id:user.id,display_name:role==='coach'?'Coach Fixture':'Admin Fixture'}],user_roles:[{user_id:user.id,role:role==='admin'?'super_admin':role}],recipes:[],coach_assignments:[],
   broadcasts:[{id:'sent',author_id:'coach',kind:'custom',title:'Client reminder',message:'Outgoing only',audience:'clients',created_at:new Date().toISOString()}],
   broadcast_recipients:[{client_id:'coach',broadcast_id:'incoming',read_at:null,dismissed_at:null,created_at:new Date().toISOString(),broadcasts:{id:'incoming',kind:'custom',title:'Studio update',message:'Incoming only',created_at:new Date().toISOString()}}]};
@@ -19,6 +19,11 @@ class Query{
 export const createClient=()=>({from:table=>new Query(table),
   auth:{onAuthStateChange(){},getSession:async()=>({data:{session:{user}}})},
   rpc:async(name,args)=>{
+    if(name==='get_broadcast_history')return {data:structuredClone(tables.broadcasts.filter(r=>(role==='admin'||r.author_id===user.id)&&!hidden.has(r.id)))};
+    if(name==='set_broadcast_history_cleared'){
+      if(window.testHistoryFailure){window.testHistoryFailure=false;return {error:{message:'Test history connection failed'}};}
+      const affected=args.broadcast_ids.filter(id=>hidden.has(id)!==args.cleared);affected.forEach(id=>args.cleared?hidden.add(id):hidden.delete(id));return {data:affected};
+    }
     if(name==='account_personal_snapshot')return {data:{name:tables.profiles[0].display_name,day:args.entry_day,habits:[],plans:[],checklist:[],favorites:[],appointments:[],streak:0}};
     if(name==='set_notifications_cleared'){const rows=tables.broadcast_recipients.filter(r=>r.client_id===args.target_user&&args.notification_ids.includes(r.broadcast_id));rows.forEach(r=>{r.dismissed_at=args.cleared?new Date().toISOString():null;});return {data:rows.map(r=>r.broadcast_id)};}
     return {data:null,error:null};
@@ -34,7 +39,7 @@ const server=createServer(async(req,res)=>{
     source=source.replace("from '@supabase/supabase-js'","from './fake-supabase.js'").replace('__APP_BUILD_ID__',"'fixture'").replace(/import\.meta\.env\.VITE_[A-Z_]+/g,"'fixture'");
     res.setHeader('Content-Type','text/javascript');res.end(source);return;
   }
-  if(['/admin-accounts.js','/client-data.js','/notifications.js','/styles.css'].includes(url.pathname)){res.setHeader('Content-Type',url.pathname.endsWith('.css')?'text/css':'text/javascript');res.end(await readFile(new URL('..'+url.pathname,import.meta.url)));return;}
+  if(['/admin-accounts.js','/client-data.js','/notifications.js','/broadcast-history.js','/styles.css'].includes(url.pathname)){res.setHeader('Content-Type',url.pathname.endsWith('.css')?'text/css':'text/javascript');res.end(await readFile(new URL('..'+url.pathname,import.meta.url)));return;}
   if(url.pathname==='/version.json'){res.setHeader('Content-Type','application/json');res.end('{"buildId":"fixture"}');return;}
   if(url.pathname!=='/'){res.statusCode=404;res.end();return;}
   res.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><div id="app"></div><div id="toast"></div><script type="module" src="/app.js"></script>');
@@ -58,6 +63,14 @@ try{
   await page.locator('.mobile-nav [data-nav="broadcasts"]').click();
   await page.getByText('Client reminder',{exact:true}).waitFor();
   assert.equal(await page.getByText('Studio update',{exact:true}).count(),0);
+  await page.getByRole('button',{name:'Clear all history',exact:true}).click();
+  await page.getByText('No broadcasts in your history.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Undo',exact:true}).click();
+  await page.getByText('Client reminder',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Clear broadcast Client reminder',exact:true}).click();
+  await page.getByText('No broadcasts in your history.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Undo',exact:true}).click();
+  await page.getByText('Client reminder',{exact:true}).waitFor();
   await page.getByRole('button',{name:/Create broadcast/}).click();
   assert.equal(await page.locator('[name="audience"]').count(),0);
   await page.getByRole('button',{name:'Close',exact:true}).click();
@@ -66,11 +79,20 @@ try{
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.goto(base+'/?role=admin');
   await page.locator('.mobile-nav [data-nav="broadcasts"]').click();
+  await page.getByText('Client reminder',{exact:true}).waitFor();
+  await page.evaluate(()=>{window.testHistoryFailure=true;});
+  await page.getByRole('button',{name:'Clear all history',exact:true}).click();
+  await page.getByText('Could not update broadcast history: Test history connection failed',{exact:true}).waitFor();
+  assert.equal(await page.getByText('Client reminder',{exact:true}).count(),1);
+  await page.getByRole('button',{name:'Clear all history',exact:true}).click();
+  await page.getByText('No broadcasts in your history.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Undo',exact:true}).click();
+  await page.getByText('Client reminder',{exact:true}).waitFor();
   await page.getByRole('button',{name:/Create broadcast/}).click();
   await page.locator('[name="audience"]').selectOption('coaches');
   await page.locator('[name="title"]').fill('Team meeting');await page.locator('[name="message"]').fill('Coaches: please join the studio meeting.');
   await page.getByRole('button',{name:'Send broadcast →',exact:true}).click();
   await page.waitForFunction(()=>window.testInserts.some(r=>r.audience==='coaches'&&r.title==='Team meeting'));
   assert.deepEqual(errors,[]);
-  console.log('PASS: actual coach app inbox navigation/read/clear, sent-history separation, live subscription, push opt-in, six-item mobile navigation, and admin audience submission.');
+  console.log('PASS: coach/admin broadcast history clear-all/individual/undo/failure, inbox separation, live subscription, push opt-in, mobile navigation, and admin audience submission.');
 }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}
