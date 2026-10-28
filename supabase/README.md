@@ -13,6 +13,7 @@ Apply each migration in `migrations/` in filename order using the Supabase SQL E
 9. `20261029000900_clear_notifications.sql` — per-recipient notification clearing and restoration, including admin inbox history and audit records.
 10. `20261029001000_coach_inbox.sql` — private coach inboxes, super-admin broadcast audiences, and audience-based push delivery. Redeploy `send-broadcast-push` after applying it. Existing broadcasts keep their original client audience.
 11. `20261029001100_clear_broadcast_history.sql` — account-owned broadcast history visibility, clear/restore RPCs, and Realtime synchronization. Broadcasts and recipient inboxes are preserved.
+12. `20261029001200_expire_cleared_messages.sql` — 48-hour recovery deadline for cleared account copies; per-minute `pg_cron` cleanup; expired-copy API protections and unused shared-content deletion. Recovery uses the clearing timestamp, not message age. Redeploy `send-broadcast-push` after applying it.
 
 The PWA only uses the project URL and publishable key. Never put a secret/service-role key or database password in browser code or a `VITE_` variable.
 

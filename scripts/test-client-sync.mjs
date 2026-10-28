@@ -32,7 +32,7 @@ const server=createServer(async(request,response)=>{
       checklist:state.checklist,favorites:state.favorites.map(id=>({id,title:'Oats',published:true})),available_recipes:[recipe]};
     response.setHeader('Content-Type','application/json');response.end(JSON.stringify({data:snapshot}));return;
   }
-  if(['/client-data.js','/admin-accounts.js','/styles.css'].includes(request.url)){
+  if(['/client-data.js','/admin-accounts.js','/retention.js','/styles.css'].includes(request.url)){
     response.setHeader('Content-Type',request.url.endsWith('.css')?'text/css':'text/javascript');response.end(await readFile(new URL(`..${request.url}`,import.meta.url)));return;
   }
   response.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><main id="app" style="padding:16px"></main>');

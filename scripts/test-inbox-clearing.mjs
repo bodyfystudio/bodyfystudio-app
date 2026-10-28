@@ -8,7 +8,7 @@ const many=Array.from({length:1005},(_,i)=>({broadcast_id:`message-${i}`}));cons
 const query={select(){return this;},eq(key,value){assert.equal(value,'client-a');return this;},is(key,value){assert.equal(key,'dismissed_at');assert.equal(value,null);return this;},order(){return this;},range(start,end){ranges.push([start,end]);return Promise.resolve({data:many.slice(start,end+1)});}};
 const all=await loadInboxRows({from:()=>query},'client-a');assert.equal(all.data.length,1005);assert.equal(ranges.length,2);
 const server=createServer(async(req,res)=>{
-  if(req.url==='/notifications.js'){res.setHeader('Content-Type','text/javascript');res.end(await readFile(new URL('../notifications.js',import.meta.url)));}
+  if(['/notifications.js','/retention.js'].includes(req.url)){res.setHeader('Content-Type','text/javascript');res.end(await readFile(new URL('..'+req.url,import.meta.url)));}
   else if(req.url==='/styles.css'){res.setHeader('Content-Type','text/css');res.end(await readFile(new URL('../styles.css',import.meta.url)));}
   else res.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><main id="app" style="padding:16px"></main>');
 });
@@ -57,6 +57,8 @@ try{
   await page.getByRole('button',{name:'Clear Studio update',exact:true}).click();
   await page.getByText('You’re all caught up.',{exact:true}).waitFor();
   assert.equal(await page.evaluate(()=>window.calls.at(-1).args.target_user),'coach-a');
+  await page.evaluate(()=>{const original=Date.now;Date.now=()=>original()+49*60*60*1000;window.render();});
+  assert.equal(await page.getByRole('button',{name:'Undo',exact:true}).count(),0);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(errors,[]);
   console.log('PASS: individual clear, clear all, undo, failed save, new arrivals, account reset, and mobile layout.');
 }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}

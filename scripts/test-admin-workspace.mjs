@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 const {chromium} = createRequire(import.meta.url)('playwright');
 const server = createServer(async (request, response) => {
   if (request.url === '/admin-accounts.js') {response.setHeader('Content-Type','text/javascript'); response.end(await readFile(new URL('../admin-accounts.js',import.meta.url)));}
+  else if (request.url === '/retention.js') {response.setHeader('Content-Type','text/javascript'); response.end(await readFile(new URL('../retention.js',import.meta.url)));}
   else if (request.url === '/client-data.js') {response.setHeader('Content-Type','text/javascript'); response.end(await readFile(new URL('../client-data.js',import.meta.url)));}
   else if (request.url === '/styles.css') {response.setHeader('Content-Type','text/css'); response.end(await readFile(new URL('../styles.css',import.meta.url)));}
   else response.end('<!doctype html><link rel="stylesheet" href="/styles.css"><main id="workspace" style="padding:16px"></main>');

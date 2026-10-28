@@ -1,3 +1,4 @@
+import {isRecoverable} from './retention.js';
 export function createHistoryController({supabase,getUser,getRows,reload,render,notify}){
   let lastClear=null,pending=false,epoch=0;
   async function clear(ids,cleared=true){
@@ -7,16 +8,16 @@ export function createHistoryController({supabase,getUser,getRows,reload,render,
     try{
       const {data:affected,error}=await supabase.rpc('set_broadcast_history_cleared',{broadcast_ids:ids,cleared});
       if(getUser()?.id!==user.id||epoch!==requestEpoch)return;
-      if(error){notify(`Could not update broadcast history: ${error.message}`);return;}
-      lastClear=cleared&&affected?.length?{userId:user.id,ids:affected}:null;
+      if(error){if(/recovery period has ended/i.test(error.message)){lastClear=null;render();}notify(`Could not update broadcast history: ${error.message}`);return;}
+      lastClear=cleared&&affected?.length?{userId:user.id,ids:affected,clearedAt:Date.now()}:null;
       await reload();
       if(getUser()?.id!==user.id||epoch!==requestEpoch)return;
-      render();notify(cleared?'Broadcast history cleared.':'Broadcast history restored.');
+      render();notify(cleared?'Broadcast history cleared.':affected?.length?'Broadcast history restored.':'This broadcast history can no longer be restored.');
     }catch(error){if(getUser()?.id===user.id&&epoch===requestEpoch)notify(`Could not update broadcast history: ${error.message}`);}
     finally{if(epoch===requestEpoch)pending=false;buttons.forEach(b=>{b.disabled=false;});}
   }
   function view(rows,renderRow){
-    return `<section class="card" style="margin-top:18px"><div class="card-title-row"><h2 class="card-title">Broadcast history</h2><div class="account-actions"><span class="tag">${rows.length} visible</span><button class="btn btn-outline btn-sm" data-clear-history ${rows.length?'':'disabled'}>Clear all history</button></div></div>${lastClear?.userId===getUser()?.id?'<div class="notice-bar inbox-undo" role="status">Broadcast history cleared. <button class="link-button" data-undo-history>Undo</button></div>':''}${rows.length?`<div class="notification-list">${rows.map(row=>renderRow({...row,clearHistory:true})).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📣</div><p>No broadcasts in your history.</p></div>'}<p class="field-help" style="margin-top:15px">Clearing hides entries from your account’s history on all your devices. Recipients keep their messages.</p></section>`;
+    return `<section class="card" style="margin-top:18px"><div class="card-title-row"><h2 class="card-title">Broadcast history</h2><div class="account-actions"><span class="tag">${rows.length} visible</span><button class="btn btn-outline btn-sm" data-clear-history ${rows.length?'':'disabled'}>Clear all history</button></div></div>${lastClear?.userId===getUser()?.id&&isRecoverable(lastClear.clearedAt)?'<div class="notice-bar inbox-undo" role="status">Broadcast history cleared. <button class="link-button" data-undo-history>Undo</button></div>':''}${rows.length?`<div class="notification-list">${rows.map(row=>renderRow({...row,clearHistory:true})).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📣</div><p>No broadcasts in your history.</p></div>'}<p class="field-help" style="margin-top:15px">Cleared history can be restored for 48 hours, then is permanently removed from your account. Recipients keep their own messages.</p></section>`;
   }
   function bind(root=document){
     root.querySelectorAll('[data-clear-broadcast]').forEach(b=>b.onclick=()=>clear([b.dataset.clearBroadcast]));

@@ -1,3 +1,4 @@
+import {isRecoverable} from './retention.js';
 const esc=(s='')=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeLink=value=>{try{const url=new URL(value);return url.protocol==='https:'&&(url.hostname==='zoom.us'||url.hostname.endsWith('.zoom.us'));}catch{return false;}};
 export async function loadInboxRows(supabase,userId){
@@ -18,23 +19,23 @@ export function createInboxController({supabase,getUser,getNotices,reload,render
     try{
       const {data:affected,error}=await supabase.rpc('set_notifications_cleared',{target_user:user.id,notification_ids:ids,cleared});
       if(getUser()?.id!==user.id||epoch!==requestEpoch)return;
-      if(error){notify(`Could not clear notifications: ${error.message}`);return;}
-      lastClear=cleared&&affected?.length?{userId:user.id,ids:affected}:null;
+      if(error){if(/recovery period has ended/i.test(error.message)){lastClear=null;render();}notify(`Could not update notifications: ${error.message}`);return;}
+      lastClear=cleared&&affected?.length?{userId:user.id,ids:affected,clearedAt:Date.now()}:null;
       await reload();
       if(getUser()?.id!==user.id||epoch!==requestEpoch)return;
-      render();notify(cleared?'Notifications cleared.':'Notifications restored.');
+      render();notify(cleared?'Notifications cleared.':affected?.length?'Notifications restored.':'These notifications can no longer be restored.');
     }catch(error){if(getUser()?.id===user.id&&epoch===requestEpoch)notify(`Could not update notifications: ${error.message}`);}
     finally{if(epoch===requestEpoch)pending=false;buttons.forEach(b=>{b.disabled=false;});}
   }
   function view(notices){
     const rows=[...notices].sort((a,b)=>b.created-a.created);
-    const canUndo=lastClear?.userId===getUser()?.id;
+    const canUndo=lastClear?.userId===getUser()?.id&&isRecoverable(lastClear.clearedAt);
     return `<div class="page-heading"><div><div class="eyebrow">Your updates</div><h1>Notifications</h1><p>${getUser()?.role==='coach'?'Studio announcements and updates for your coach account.':'Reminders and updates from BodyfyStudio.'}</p></div><div class="account-actions"><button class="btn btn-outline" data-action="mark-read" ${rows.length?'':'disabled'}>Mark all as read</button><button class="btn btn-outline" data-clear-inbox ${rows.length?'':'disabled'}>Clear all</button></div></div>
     ${canUndo?'<div class="notice-bar inbox-undo" role="status">Notifications cleared. <button class="link-button" data-undo-clear>Undo</button></div>':''}
     <section class="card"><div class="card-title-row"><h2 class="card-title">Recent updates</h2><span class="tag">${rows.length} total</span></div>${rows.length?`<div class="notification-list">${rows.map(n=>{
       const icon=n.kind==='zoom'?'🎥':n.kind==='water'?'💧':n.kind==='fruit'?'🍊':'✦';
       return `<article class="notification-item ${n.read?'':'unread'}"><div class="notification-icon">${icon}</div><div class="notification-content"><strong>${esc(n.title)}</strong><p>${esc(n.message)}</p><time>${esc(new Date(n.created).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}))}</time>${n.kind==='zoom'&&safeLink(n.link)?`<div style="margin-top:10px"><a class="btn btn-primary btn-sm" href="${esc(n.link)}" target="_blank" rel="noopener noreferrer" data-notice-link="${n.id}">Join Zoom meeting ↗</a></div>`:''}</div><div class="notification-actions">${n.read?'':'<span class="tag">New</span>'}<button class="link-button" data-clear-notice="${n.id}" aria-label="Clear ${esc(n.title)}">Clear</button></div></article>`;
-    }).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">🔔</div><strong>You’re all caught up.</strong><br>New updates will appear here.</div>'}</section><div class="notice-bar" style="margin-top:15px">Clearing removes messages from your inbox on all your devices. New notifications will still arrive.</div>`;
+    }).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">🔔</div><strong>You’re all caught up.</strong><br>New updates will appear here.</div>'}</section><div class="notice-bar" style="margin-top:15px">Cleared notifications can be restored for 48 hours, then are permanently removed from your account. New notifications will still arrive.</div>`;
   }
   function bind(root=document){
     root.querySelectorAll('[data-clear-notice]').forEach(b=>b.onclick=()=>clear([b.dataset.clearNotice]));

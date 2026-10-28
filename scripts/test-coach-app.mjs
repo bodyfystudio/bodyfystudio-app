@@ -39,7 +39,7 @@ const server=createServer(async(req,res)=>{
     source=source.replace("from '@supabase/supabase-js'","from './fake-supabase.js'").replace('__APP_BUILD_ID__',"'fixture'").replace(/import\.meta\.env\.VITE_[A-Z_]+/g,"'fixture'");
     res.setHeader('Content-Type','text/javascript');res.end(source);return;
   }
-  if(['/admin-accounts.js','/client-data.js','/notifications.js','/broadcast-history.js','/styles.css'].includes(url.pathname)){res.setHeader('Content-Type',url.pathname.endsWith('.css')?'text/css':'text/javascript');res.end(await readFile(new URL('..'+url.pathname,import.meta.url)));return;}
+  if(['/admin-accounts.js','/client-data.js','/notifications.js','/retention.js','/broadcast-history.js','/styles.css'].includes(url.pathname)){res.setHeader('Content-Type',url.pathname.endsWith('.css')?'text/css':'text/javascript');res.end(await readFile(new URL('..'+url.pathname,import.meta.url)));return;}
   if(url.pathname==='/version.json'){res.setHeader('Content-Type','application/json');res.end('{"buildId":"fixture"}');return;}
   if(url.pathname!=='/'){res.statusCode=404;res.end();return;}
   res.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><div id="app"></div><div id="toast"></div><script type="module" src="/app.js"></script>');
@@ -62,9 +62,22 @@ try{
   await page.getByText('You’re all caught up.',{exact:true}).waitFor();
   await page.locator('.mobile-nav [data-nav="broadcasts"]').click();
   await page.getByText('Client reminder',{exact:true}).waitFor();
+  assert.equal(await page.getByText('Preview on a client phone',{exact:true}).count(),0);
+  assert.equal(await page.locator('.broadcast-preview').count(),0);
   assert.equal(await page.getByText('Studio update',{exact:true}).count(),0);
   await page.getByRole('button',{name:'Clear all history',exact:true}).click();
   await page.getByText('No broadcasts in your history.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Undo',exact:true}).click();
+  await page.getByText('Client reminder',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Clear all history',exact:true}).click();
+  await page.getByRole('button',{name:'Undo',exact:true}).waitFor();
+  await page.evaluate(()=>{const original=Date.now;Date.now=()=>original()+49*60*60*1000;window.restoreClock=()=>{Date.now=original;};});
+  await page.locator('.mobile-nav [data-nav="home"]').click();
+  await page.locator('.mobile-nav [data-nav="broadcasts"]').click();
+  assert.equal(await page.getByRole('button',{name:'Undo',exact:true}).count(),0);
+  await page.evaluate(()=>window.restoreClock());
+  await page.locator('.mobile-nav [data-nav="home"]').click();
+  await page.locator('.mobile-nav [data-nav="broadcasts"]').click();
   await page.getByRole('button',{name:'Undo',exact:true}).click();
   await page.getByText('Client reminder',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Clear broadcast Client reminder',exact:true}).click();
@@ -79,6 +92,7 @@ try{
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.goto(base+'/?role=admin');
   await page.locator('.mobile-nav [data-nav="broadcasts"]').click();
+  assert.equal(await page.getByText('Preview on a client phone',{exact:true}).count(),0);
   await page.getByText('Client reminder',{exact:true}).waitFor();
   await page.evaluate(()=>{window.testHistoryFailure=true;});
   await page.getByRole('button',{name:'Clear all history',exact:true}).click();

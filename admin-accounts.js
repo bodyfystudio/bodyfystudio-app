@@ -1,5 +1,6 @@
 // All account reads and writes use the real admin session and checked database RPCs.
 import {localDay, planTasks} from './client-data.js';
+import {isRecoverable} from './retention.js';
 const escapeHtml = (value = '') => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const labels = {client:'Client', coach:'Coach', super_admin:'Super admin'};
 const definitions = {
@@ -82,14 +83,14 @@ export function createAccountWorkspace({supabase, notify, onClose, onChanged}) {
     return `<div class="field"><label>Checklist day<input type="date" data-checklist-day value="${checklistDay}" max="${localDay()}"></label></div>${plans.map(plan=>`<section class="card account-record"><h2 class="card-title">${escapeHtml(plan.title)}</h2>${planTasks(plan).map(task=>{const done=snapshot.checklist.some(c=>c.plan_id===plan.id&&c.task_key===task.key&&c.entry_date===checklistDay&&c.completed);return `<div class="today-row"><div class="today-info"><strong>${escapeHtml(task.title)}</strong><div class="account-detail">${escapeHtml(task.description)}</div></div>${button(done?'Done ✓':'Mark done',`data-checklist-plan="${plan.id}" data-task="${escapeHtml(task.key)}" data-completed="${!done}" aria-pressed="${done}"`)}</div>`;}).join('')||'<p class="empty-state">No checklist details yet.</p>'}</section>`).join('')||'<section class="card empty-state">No plan for this day.</section>'}`;
   }
   function renderInbox() {
-    const active=snapshot.inbox.filter(n=>!n.dismissed_at);
-    return `<section class="card"><div class="card-title-row"><h2 class="card-title">Inbox · ${active.length} active</h2>${active.length?button('Clear active notifications','data-admin-clear-all'):''}</div>${snapshot.inbox.map(n => `<article class="notification-item"><div class="notification-content"><strong>${escapeHtml(n.title)}</strong><p>${escapeHtml(n.message)}</p><time>${date(n.created_at)} · ${n.dismissed_at ? 'Cleared' : n.read_at ? 'Read' : 'Unread'}</time>${n.action_url ? detail('Meeting link', n.action_url) : ''}</div>${editable()?`<div class="notification-actions">${button(n.dismissed_at?'Restore':'Clear',`data-admin-clear="${n.id}" data-cleared="${!n.dismissed_at}"`)}${n.dismissed_at?'':button(n.read_at?'Mark unread':'Mark read',`data-inbox-id="${n.id}" data-read="${!n.read_at}"`)}</div>`:''}</article>`).join('') || '<p class="empty-state">No messages for this account yet.</p>'}</section>`;
+    const visible=snapshot.inbox.filter(n=>!n.dismissed_at||isRecoverable(n.dismissed_at));const active=visible.filter(n=>!n.dismissed_at);
+    return `<section class="card"><div class="card-title-row"><h2 class="card-title">Inbox · ${active.length} active</h2>${active.length?button('Clear active notifications','data-admin-clear-all'):''}</div>${visible.map(n => `<article class="notification-item"><div class="notification-content"><strong>${escapeHtml(n.title)}</strong><p>${escapeHtml(n.message)}</p><time>${date(n.created_at)} · ${n.dismissed_at ? 'Cleared' : n.read_at ? 'Read' : 'Unread'}</time>${n.action_url ? detail('Meeting link', n.action_url) : ''}</div>${editable()?`<div class="notification-actions">${button(n.dismissed_at?'Restore':'Clear',`data-admin-clear="${n.id}" data-cleared="${!n.dismissed_at}"`)}${n.dismissed_at?'':button(n.read_at?'Mark unread':'Mark read',`data-inbox-id="${n.id}" data-read="${!n.read_at}"`)}</div>`:''}</article>`).join('') || '<p class="empty-state">No messages for this account yet.</p>'}</section>`;
   }
   async function clearInbox(ids,cleared){
     if(saving)return;saving=true;host.querySelectorAll('button').forEach(b=>{b.disabled=true;});
-    const {error:failure}=await supabase.rpc('set_notifications_cleared',{target_user:targetId,notification_ids:ids,cleared});
-    saving=false;if(failure){error=`Could not update inbox: ${failure.message}`;render();return;}
-    await load();notify(cleared?'Notifications cleared.':'Notifications restored.');
+    const {data:affected,error:failure}=await supabase.rpc('set_notifications_cleared',{target_user:targetId,notification_ids:ids,cleared});
+    saving=false;if(failure){if(/recovery period has ended/i.test(failure.message)){await load();notify(failure.message);}else{error=`Could not update inbox: ${failure.message}`;render();}return;}
+    await load();notify(cleared?'Notifications cleared.':affected?.length?'Notifications restored.':'These notifications can no longer be restored.');
   }
   function renderActivity() {
     return `<section class="card"><h2 class="card-title">Recent admin activity</h2>${snapshot.activity.map(a => `<div class="today-row"><div class="today-info"><strong>${escapeHtml(a.action)}</strong><span>${escapeHtml(person(a.actor_id))} · ${date(a.created_at)}</span></div></div>`).join('') || '<p class="empty-state">No activity yet.</p>'}</section>`;

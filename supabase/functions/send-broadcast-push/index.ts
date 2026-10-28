@@ -43,6 +43,10 @@ Deno.serve(async (request) => {
   if (roleError) return Response.json({ error: 'Could not verify account role.' }, { status: 500, headers });
   if (!['coach', 'super_admin'].includes(roleRow?.role)) return Response.json({ error: 'Coach access required.' }, { status: 403, headers });
 
+  const { data: canSend, error: expiryError } = await admin.rpc('can_send_broadcast_push', { target_actor: authData.user.id, target_broadcast: broadcastId });
+  if (expiryError) return Response.json({ error: 'Could not verify broadcast availability.' }, { status: 500, headers });
+  if (!canSend) return Response.json({ error: 'This broadcast is unavailable or its recovery period has ended.' }, { status: 410, headers });
+
   const { data: broadcast, error: broadcastError } = await admin.from('broadcasts')
     .select('id,author_id,title,message,action_url').eq('id', broadcastId).eq('author_id', authData.user.id).maybeSingle();
   if (broadcastError) {
