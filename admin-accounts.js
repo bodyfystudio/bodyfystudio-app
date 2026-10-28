@@ -82,7 +82,14 @@ export function createAccountWorkspace({supabase, notify, onClose, onChanged}) {
     return `<div class="field"><label>Checklist day<input type="date" data-checklist-day value="${checklistDay}" max="${localDay()}"></label></div>${plans.map(plan=>`<section class="card account-record"><h2 class="card-title">${escapeHtml(plan.title)}</h2>${planTasks(plan).map(task=>{const done=snapshot.checklist.some(c=>c.plan_id===plan.id&&c.task_key===task.key&&c.entry_date===checklistDay&&c.completed);return `<div class="today-row"><div class="today-info"><strong>${escapeHtml(task.title)}</strong><div class="account-detail">${escapeHtml(task.description)}</div></div>${button(done?'Done ✓':'Mark done',`data-checklist-plan="${plan.id}" data-task="${escapeHtml(task.key)}" data-completed="${!done}" aria-pressed="${done}"`)}</div>`;}).join('')||'<p class="empty-state">No checklist details yet.</p>'}</section>`).join('')||'<section class="card empty-state">No plan for this day.</section>'}`;
   }
   function renderInbox() {
-    return `<section class="card"><h2 class="card-title">Inbox · ${snapshot.inbox.length}</h2>${snapshot.inbox.map(n => `<article class="notification-item"><div class="notification-content"><strong>${escapeHtml(n.title)}</strong><p>${escapeHtml(n.message)}</p><time>${date(n.created_at)} · ${n.read_at ? 'Read' : 'Unread'}</time>${n.action_url ? detail('Meeting link', n.action_url) : ''}</div>${editable() ? button(n.read_at ? 'Mark unread' : 'Mark read', `data-inbox-id="${n.id}" data-read="${!n.read_at}"`) : ''}</article>`).join('') || '<p class="empty-state">No messages for this account yet.</p>'}</section>`;
+    const active=snapshot.inbox.filter(n=>!n.dismissed_at);
+    return `<section class="card"><div class="card-title-row"><h2 class="card-title">Inbox · ${active.length} active</h2>${active.length?button('Clear active notifications','data-admin-clear-all'):''}</div>${snapshot.inbox.map(n => `<article class="notification-item"><div class="notification-content"><strong>${escapeHtml(n.title)}</strong><p>${escapeHtml(n.message)}</p><time>${date(n.created_at)} · ${n.dismissed_at ? 'Cleared' : n.read_at ? 'Read' : 'Unread'}</time>${n.action_url ? detail('Meeting link', n.action_url) : ''}</div>${editable()?`<div class="notification-actions">${button(n.dismissed_at?'Restore':'Clear',`data-admin-clear="${n.id}" data-cleared="${!n.dismissed_at}"`)}${n.dismissed_at?'':button(n.read_at?'Mark unread':'Mark read',`data-inbox-id="${n.id}" data-read="${!n.read_at}"`)}</div>`:''}</article>`).join('') || '<p class="empty-state">No messages for this account yet.</p>'}</section>`;
+  }
+  async function clearInbox(ids,cleared){
+    if(saving)return;saving=true;host.querySelectorAll('button').forEach(b=>{b.disabled=true;});
+    const {error:failure}=await supabase.rpc('set_notifications_cleared',{target_user:targetId,notification_ids:ids,cleared});
+    saving=false;if(failure){error=`Could not update inbox: ${failure.message}`;render();return;}
+    await load();notify(cleared?'Notifications cleared.':'Notifications restored.');
   }
   function renderActivity() {
     return `<section class="card"><h2 class="card-title">Recent admin activity</h2>${snapshot.activity.map(a => `<div class="today-row"><div class="today-info"><strong>${escapeHtml(a.action)}</strong><span>${escapeHtml(person(a.actor_id))} · ${date(a.created_at)}</span></div></div>`).join('') || '<p class="empty-state">No activity yet.</p>'}</section>`;
@@ -159,6 +166,8 @@ export function createAccountWorkspace({supabase, notify, onClose, onChanged}) {
     host.querySelector('[data-account-editor]')?.addEventListener('submit', submitEditor);
     host.querySelectorAll('[data-add-detail]').forEach(b => b.onclick = () => {b.parentElement.querySelector('[data-object-rows]').insertAdjacentHTML('beforeend', objectRow());});
     host.querySelectorAll('[data-inbox-id]').forEach(b => b.onclick = () => update('inbox', b.dataset.inboxId, {read:b.dataset.read === 'true'}));
+    host.querySelectorAll('[data-admin-clear]').forEach(b=>b.onclick=()=>clearInbox([b.dataset.adminClear],b.dataset.cleared==='true'));
+    host.querySelector('[data-admin-clear-all]')?.addEventListener('click',()=>clearInbox(snapshot.inbox.filter(n=>!n.dismissed_at).map(n=>n.id),true));
     host.querySelectorAll('[data-unassign]').forEach(b => b.onclick = () => update('unassign', null, {client_id:b.dataset.unassign}));
     host.querySelectorAll('[data-remove-favorite]').forEach(b=>b.onclick=()=>update('favorites',b.dataset.removeFavorite,{saved:false}));
     host.querySelector('[data-favorite-form]')?.addEventListener('submit',e=>{e.preventDefault();update('favorites',new FormData(e.currentTarget).get('recipe_id'),{saved:true});});
