@@ -3,3 +3,6 @@ verify_jwt = true
 
 [functions.admin-list-users]
 verify_jwt = true
+
+[functions.send-broadcast-push]
+verify_jwt = true

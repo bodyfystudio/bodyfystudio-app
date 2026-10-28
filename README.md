@@ -28,6 +28,20 @@ See [supabase/README.md](supabase/README.md) for migration order, first super ad
 - Coach-published recipes are shared through the `recipes` table.
 - Coach broadcasts are saved to Supabase and create per-client inbox entries through the SQL trigger.
 - Clients can receive live inbox updates while the app is open when the Realtime migration is enabled.
+- Clients can opt into device push alerts for coach broadcasts; each device must grant permission.
 - Super admins can manage client/coach roles through a protected SQL RPC and invite coaches through a protected Edge Function.
 
-Device push alerts while the app is closed, client/coach assignments, client plans, and saving recipes across devices are not implemented yet. Avoid entering real health records until those workflows and the hosted security configuration are reviewed.
+Client/coach assignments, client plans, and saving recipes across devices are not implemented yet. Avoid entering real health records until those workflows and the hosted security configuration are reviewed.
+
+## Device push notifications
+
+For iPhone, the client must add the PWA to the Home Screen on iOS/iPadOS 16.4 or later, sign in, and tap **Profile → Enable notifications**. Other supported browsers also require the client to opt in on each device. Push subscriptions are stored per user under row-level security; the VAPID private key is stored only as a Supabase Edge Function secret.
+
+The VAPID key pair has already been generated for this workspace and saved in the ignored `.env.push.local` file. Do not regenerate it after clients subscribe. Add `VITE_VAPID_PUBLIC_KEY` from that file to the Vercel project’s Production environment variables, then redeploy. From PowerShell in the project folder, set the private server secret and deploy the sender:
+
+```powershell
+npx supabase secrets set --env-file .env.push.local
+npx supabase functions deploy send-broadcast-push
+```
+
+Apply `supabase/migrations/20261028000500_push_subscriptions.sql` in the Supabase SQL Editor before clients enable notifications. The coach broadcast still appears in every client’s in-app inbox; device alerts are sent only to opted-in devices.
