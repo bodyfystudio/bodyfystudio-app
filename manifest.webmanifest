@@ -1,0 +1,12 @@
+{
+  "name": "BodyfyStudio Wellness",
+  "short_name": "BodyfyStudio",
+  "description": "Your BodyfyStudio wellness journey, all in one place.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f7f7f3",
+  "theme_color": "#171816",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

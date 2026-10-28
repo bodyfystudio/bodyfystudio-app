@@ -1,0 +1,5 @@
+[functions.admin-invite-coach]
+verify_jwt = true
+
+[functions.admin-list-users]
+verify_jwt = true
