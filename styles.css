@@ -11,3 +11,5 @@
 @media (max-width:760px), (pointer:coarse){
   .field input,.field textarea,.field select,.search-input{font-size:16px}
 }
+
+.brand-mark.brand-logo{background:#000;object-fit:contain;flex-shrink:0}
